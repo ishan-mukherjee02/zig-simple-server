@@ -21,6 +21,7 @@ const Socket = struct {
 
     fn bind(self: *Socket) !void {
         try os.bind(self.socket, &self.address.any, self.address.getOsSockLen());
+        std.debug.print("Socket created, listening on port 3000\n", .{});
     }
 
     fn listen(self: *Socket) !void {
@@ -33,10 +34,23 @@ const Socket = struct {
     }
 };
 
+fn handle_user_input() void {
+    var stdin = std.io.getStdIn().reader();
+    var line: []u8 = undefined;
+    while (true) {
+        line = try stdin.readUntilDelimiterOrEofAlloc(std.heap.page_allocator, '\n');
+        std.debug.print("User input: {s}\n", .{line});
+        std.heap.page_allocator.free(line);
+    }
+}
+
 pub fn main() !void {
     var socket = try Socket.init("127.0.0.1", 3000);
     try socket.bind();
-    std.debug.print("Socket created, listening on port 3000\n", .{});
 
-    try socket.listen();
+    var listener_thread = try std.Thread.spawn(.{}, Socket.listen, {});
+    var input_thread = try std.Thread.spawn(.{}, handle_user_input, {});
+
+    try listener_thread.join();
+    try input_thread.join();
 }
