@@ -36,21 +36,34 @@ const Socket = struct {
 
 fn handle_user_input() void {
     var stdin = std.io.getStdIn().reader();
-    var line: []u8 = undefined;
+    var stdout = std.io.getStdOut().writer();
+
+    var input: [256]u8 = undefined;
+    var input_buffer = input[0..];
+
     while (true) {
-        line = try stdin.readUntilDelimiterOrEofAlloc(std.heap.page_allocator, '\n');
-        std.debug.print("User input: {s}\n", .{line});
-        std.heap.page_allocator.free(line);
+        try stdout.print("Enter message (type 'exit' to quit): ", .{});
+        if (try stdin.readUntilDelimiterOrEof(input_buffer[0..], '\n')) |user_input| {
+            var trimmed_input = user_input;
+            while (trimmed_input.len > 0 and (trimmed_input[trimmed_input.len - 1] == '\r')) {
+                trimmed_input = trimmed_input[0 .. trimmed_input.len - 1];
+            }
+            if (std.mem.eql(u8, trimmed_input, "exit")) {
+                break;
+            }
+        } else {
+            break;
+        }
     }
 }
 
 pub fn main() !void {
-    var socket = try Socket.init("127.0.0.1", 3000);
-    try socket.bind();
+    var name = try Socket.init("127.0.0.1", 3000);
+    try name.bind();
 
-    var listener_thread = try std.Thread.spawn(.{}, Socket.listen, {});
-    var input_thread = try std.Thread.spawn(.{}, handle_user_input, {});
+    // var listener_thread = try std.Thread.spawn(.{}, Socket.listen, .{&name});
+    var input_thread = try std.Thread.spawn(.{}, handle_user_input, .{});
 
-    try listener_thread.join();
+    // try listener_thread.join();
     try input_thread.join();
 }
