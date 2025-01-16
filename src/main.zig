@@ -2,6 +2,7 @@ const std = @import("std");
 const expect = std.testing.expect;
 const net = std.net;
 const os = std.posix;
+const Mutex = std.Thread.Mutex;
 
 test "create a socket" {
     const socket = try Socket.init("127.0.0.1", 3000);
@@ -11,12 +12,13 @@ test "create a socket" {
 const Socket = struct {
     address: std.net.Address,
     socket: std.posix.socket_t,
+    mutex: Mutex,
 
-    fn init(ip: []const u8, port: u16) !Socket {
+    fn init(ip: []const u8, port: u16, init_mutex: Mutex) !Socket {
         const parsed_address = try std.net.Address.parseIp4(ip, port);
         const sock = try std.posix.socket(std.posix.AF.INET, std.posix.SOCK.DGRAM, 0);
         errdefer os.closeSocket(sock);
-        return Socket{ .address = parsed_address, .socket = sock };
+        return Socket{ .address = parsed_address, .socket = sock, .mutex = init_mutex };
     }
 
     fn bind(self: *Socket) !void {
@@ -28,13 +30,15 @@ const Socket = struct {
         var buffer: [1024]u8 = undefined;
 
         while (true) {
+            self.mutex.lock();
             const received_bytes = try std.posix.recvfrom(self.socket, buffer[0..], 0, null, null);
             std.debug.print("Received {d} bytes: {s}\n", .{ received_bytes, buffer[0..received_bytes] });
+            self.mutex.unlock();
         }
     }
 };
 
-fn handle_user_input() void {
+fn handle_user_input(mutex: *Mutex) !void {
     var stdin = std.io.getStdIn().reader();
     var stdout = std.io.getStdOut().writer();
 
@@ -42,6 +46,7 @@ fn handle_user_input() void {
     var input_buffer = input[0..];
 
     while (true) {
+        mutex.lock();
         try stdout.print("Enter message (type 'exit' to quit): ", .{});
         if (try stdin.readUntilDelimiterOrEof(input_buffer[0..], '\n')) |user_input| {
             var trimmed_input = user_input;
@@ -54,16 +59,22 @@ fn handle_user_input() void {
         } else {
             break;
         }
+        mutex.unlock();
     }
 }
 
 pub fn main() !void {
-    var name = try Socket.init("127.0.0.1", 3000);
+    var mutex = Mutex{};
+    var name = try Socket.init(
+        "127.0.0.1",
+        3000,
+        mutex,
+    );
     try name.bind();
 
-    // var listener_thread = try std.Thread.spawn(.{}, Socket.listen, .{&name});
-    var input_thread = try std.Thread.spawn(.{}, handle_user_input, .{});
+    var listener_thread = try std.Thread.spawn(.{}, Socket.listen, .{&name});
+    var input_thread = try std.Thread.spawn(.{}, handle_user_input, .{&mutex});
 
-    // try listener_thread.join();
-    try input_thread.join();
+    listener_thread.join();
+    input_thread.join();
 }
