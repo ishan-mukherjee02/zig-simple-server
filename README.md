@@ -1,3 +1,3 @@
 # zig-simple-server
 
-Simple UDP Zig server using sockets
+Multithreaded UDP Zig server using sockets. Uses Zig 0.13.0
