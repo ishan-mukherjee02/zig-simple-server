@@ -32,7 +32,7 @@ const Socket = struct {
         while (true) {
             self.mutex.lock();
             const received_bytes = try std.posix.recvfrom(self.socket, buffer[0..], 0, null, null);
-            std.debug.print("Received {d} bytes: {s}\n", .{ received_bytes, buffer[0..received_bytes] });
+            std.debug.print("\nReceived {d} bytes: {s}", .{ received_bytes, buffer[0..received_bytes] });
             self.mutex.unlock();
         }
     }
@@ -47,14 +47,14 @@ fn handle_user_input(mutex: *Mutex) !void {
 
     while (true) {
         mutex.lock();
-        try stdout.print("Enter message (type 'exit' to quit): ", .{});
+        try stdout.print("Enter message (type 'q' to quit): ", .{});
         if (try stdin.readUntilDelimiterOrEof(input_buffer[0..], '\n')) |user_input| {
             var trimmed_input = user_input;
             while (trimmed_input.len > 0 and (trimmed_input[trimmed_input.len - 1] == '\r')) {
                 trimmed_input = trimmed_input[0 .. trimmed_input.len - 1];
             }
-            if (std.mem.eql(u8, trimmed_input, "exit")) {
-                break;
+            if (std.mem.eql(u8, trimmed_input, "q")) {
+                os.exit(0);
             }
         } else {
             break;
